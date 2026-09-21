@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attendance Desk</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="loginView" class="login-shell">
+    <section class="login-panel">
+      <div class="brand-mark">AD</div>
+      <p class="eyebrow">SHENYANG AEROSPACE UNIVERSITY</p>
+      <h1>Attendance Desk</h1>
+      <p class="muted">A focused workspace for accurate, accountable class attendance.</p>
+      <form id="loginForm" class="stack">
+        <label>Username<input name="username" autocomplete="username" required placeholder="admin"></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
+        <button class="button primary wide" type="submit">Sign in <span aria-hidden="true">→</span></button>
+        <p id="loginError" class="form-error"></p>
+      </form>
+      <p class="login-footnote">Local PostgreSQL application · course design project</p>
+    </section>
+    <aside class="login-aside">
+      <div>
+        <p class="eyebrow light">STUDENT ATTENDANCE INFORMATION MANAGEMENT</p>
+        <h2>Make every class record count.</h2>
+        <p>Manage attendance, identify patterns, and keep a dependable history of academic participation.</p>
+      </div>
+      <div class="aside-metrics"><span><b>03</b> statuses</span><span><b>01</b> source of truth</span></div>
+    </aside>
+  </main>
+
+  <main id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="brand-mark small">AD</div><div><strong>Attendance</strong><span>Desk</span></div></div>
+      <nav>
+        <button class="nav-item active" data-section="overview"><span>◈</span> Overview</button>
+        <button class="nav-item" data-section="records"><span>▤</span> Attendance records</button>
+        <button class="nav-item admin-control" data-section="activity"><span>↻</span> Activity log</button>
+      </nav>
+      <div class="sidebar-bottom"><div class="user-chip"><div class="avatar" id="userAvatar">A</div><div><strong id="userName">Admin</strong><span id="userRole">Administrator</span></div></div><button id="logoutBtn" class="icon-button" title="Sign out">↪</button></div>
+    </aside>
+    <section class="content">
+      <header class="topbar"><div><p class="eyebrow" id="sectionKicker">ATTENDANCE OPERATIONS</p><h1 id="sectionTitle">Overview</h1></div><div class="topbar-actions"><span class="date-label" id="todayLabel"></span><button class="button primary admin-control" id="addRecordBtn">＋ Add record</button></div></header>
+
+      <section id="overviewSection" class="section">
+        <div class="summary-grid">
+          <article class="metric"><div class="metric-label">Total records <span>↗</span></div><strong id="totalMetric">0</strong><small>All attendance entries</small></article>
+          <article class="metric"><div class="metric-label">Punctual <span class="status-dot punctual"></span></div><strong id="punctualMetric">0</strong><small id="punctualRate">0% of records</small></article>
+          <article class="metric"><div class="metric-label">Late <span class="status-dot late"></span></div><strong id="lateMetric">0</strong><small>Needs attention</small></article>
+          <article class="metric"><div class="metric-label">Absent <span class="status-dot absent"></span></div><strong id="absentMetric">0</strong><small id="studentMetric">0 students tracked</small></article>
+        </div>
+        <div class="overview-grid">
+          <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">CLASS PULSE</p><h2>Punctuality by class</h2></div><span class="panel-note">Lowest first</span></div><div id="classBars" class="class-bars empty-state">No attendance data yet.</div></article>
+          <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RECENT VOLUME</p><h2>Last seven dates</h2></div></div><div id="recentList" class="recent-list empty-state">No attendance data yet.</div></article>
+        </div>
+      </section>
+
+      <section id="recordsSection" class="section hidden">
+        <div class="toolbar"><div class="search-wrap"><span>⌕</span><input id="searchInput" placeholder="Search by student ID or name"></div><select id="classFilter"><option value="">All classes</option></select><select id="courseFilter"><option value="">All courses</option></select><select id="statusFilter"><option value="">All statuses</option><option>Punctual</option><option>Late</option><option>Absent</option></select><button class="button subtle" id="resetFilters">Reset</button></div>
+        <div class="panel table-panel"><div class="table-meta"><span id="recordCount">0 records</span><div><button class="button subtle admin-control" id="importBtn">⇧ Import</button><button class="button subtle admin-control" id="exportBtn">⇩ Export CSV</button></div></div><div class="table-scroll"><table><thead><tr><th>Student</th><th>Class</th><th>Course</th><th>Date</th><th>Status</th><th class="admin-control">Actions</th></tr></thead><tbody id="recordsBody"></tbody></table><div id="tableEmpty" class="empty-state hidden">No records match the current filters.</div></div></div>
+      </section>
+
+      <section id="activitySection" class="section hidden"><div class="panel table-panel"><div class="panel-heading"><div><p class="eyebrow">ACCOUNTABILITY</p><h2>Recent activity</h2></div></div><div class="table-scroll"><table><thead><tr><th>Action</th><th>User</th><th>Details</th><th>Time</th></tr></thead><tbody id="auditBody"></tbody></table></div></div></section>
+    </section>
+  </main>
+
+  <dialog id="recordDialog"><form id="recordForm" method="dialog"><div class="dialog-heading"><div><p class="eyebrow">ATTENDANCE RECORD</p><h2 id="dialogTitle">Add record</h2></div><button type="button" class="icon-button" id="closeDialog" title="Close">×</button></div><input type="hidden" name="id"><div class="form-grid"><label>Student ID<input name="studentId" required placeholder="2351520115"></label><label>Student name<input name="studentName" required placeholder="Student name"></label><label>Class<input name="className" required placeholder="2351520115"></label><label>Course<input name="course" required placeholder="Computer Science"></label><label>Date<input name="attendanceDate" type="date" required></label><label>Status<select name="status" required><option>Punctual</option><option>Late</option><option>Absent</option></select></label></div><p id="formError" class="form-error"></p><div class="dialog-actions"><button type="button" class="button subtle" id="cancelDialog">Cancel</button><button class="button primary" type="submit">Save record</button></div></form></dialog>
+  <input id="fileInput" type="file" accept=".csv,.txt" hidden>
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
