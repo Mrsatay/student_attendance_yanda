@@ -1,0 +1,11 @@
+student_id,student_name,class_name,course,attendance_date,status
+2351520101,Ahmad Fauzan,2351520115,Computer Science,2026-09-21,Punctual
+2351520102,Siti Aisyah,2351520115,Computer Science,2026-09-21,Late
+2351520103,Budi Santoso,2351520115,Computer Science,2026-09-21,Absent
+2351520104,Dewi Lestari,2351520115,Database Systems,2026-09-22,Punctual
+2351520105,Rizky Pratama,2351520115,Database Systems,2026-09-22,Punctual
+2351520106,Nadia Putri,2351520116,Web Programming,2026-09-23,Late
+2351520107,Farhan Maulana,2351520116,Web Programming,2026-09-23,Punctual
+2351520108,Laras Anindya,2351520116,Software Engineering,2026-09-24,Absent
+2351520109,Kevin Wijaya,2351520117,Software Engineering,2026-09-24,Punctual
+2351520110,Maya Ramadhani,2351520117,Data Structures,2026-09-25,Late
