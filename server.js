@@ -116,6 +116,10 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id BIGINT REFERENCES students(id) ON DELETE SET NULL;
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'viewer', 'student'));
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_student_id ON users(student_id) WHERE student_id IS NOT NULL;
     CREATE TABLE IF NOT EXISTS courses (
       id BIGSERIAL PRIMARY KEY,
       code VARCHAR(24) UNIQUE NOT NULL,
@@ -195,6 +199,7 @@ async function ensureSchema() {
     console.log(`Created initial administrator: ${username}`);
   }
   await migrateLegacyAttendance();
+  await ensureStudentAccounts();
 }
 
 async function migrateLegacyAttendance() {
@@ -235,14 +240,28 @@ async function migrateLegacyAttendance() {
   `);
 }
 
+async function ensureStudentAccount(studentPk, studentId, db = pool) {
+  await db.query(
+    `INSERT INTO users (username, password_hash, role, student_id)
+     VALUES ($1, $2, 'student', $3)
+     ON CONFLICT (username) DO UPDATE SET student_id=EXCLUDED.student_id`,
+    [studentId, hashPassword(studentId), studentPk]
+  );
+}
+
+async function ensureStudentAccounts() {
+  const result = await pool.query("SELECT id, student_id FROM students WHERE active=true");
+  for (const student of result.rows) await ensureStudentAccount(student.id, student.student_id);
+}
+
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const result = await pool.query("SELECT id, username, password_hash, role FROM users WHERE username = $1", [String(req.body.username || "").trim()]);
+    const result = await pool.query("SELECT id, username, password_hash, role, student_id AS \"studentPk\" FROM users WHERE username = $1", [String(req.body.username || "").trim()]);
     const user = result.rows[0];
     if (!user || !verifyPassword(String(req.body.password || ""), user.password_hash)) {
       return res.status(401).json({ error: "Invalid username or password." });
     }
-    req.session.user = { id: user.id, username: user.username, role: user.role };
+    req.session.user = { id: user.id, username: user.username, role: user.role, studentPk: user.studentPk };
     res.json({ user: req.session.user });
   } catch (error) {
     res.status(500).json({ error: "Database connection is not ready." });
@@ -446,6 +465,7 @@ app.post("/api/students", adminOnly, async (req, res) => {
   if (errors.length) return res.status(400).json({ error: errors.join(" ") });
   try {
     const result = await pool.query("INSERT INTO students (student_id,name,class_name,email) VALUES ($1,$2,$3,$4) RETURNING id", [data.studentId, data.name, data.className, data.email]);
+    await ensureStudentAccount(result.rows[0].id, data.studentId);
     await audit(pool, req.session.user.id, "CREATE_STUDENT", result.rows[0].id, `${data.studentId} / ${data.name}`);
     res.status(201).json({ id: result.rows[0].id });
   } catch (error) {
@@ -458,6 +478,7 @@ app.put("/api/students/:id", adminOnly, async (req, res) => {
   if (errors.length) return res.status(400).json({ error: errors.join(" ") });
   const result = await pool.query("UPDATE students SET student_id=$1,name=$2,class_name=$3,email=$4,updated_at=NOW() WHERE id=$5 AND active=true RETURNING id", [data.studentId, data.name, data.className, data.email, req.params.id]);
   if (!result.rowCount) return res.status(404).json({ error: "Active student not found." });
+  await ensureStudentAccount(req.params.id, data.studentId);
   await audit(pool, req.session.user.id, "UPDATE_STUDENT", req.params.id, `${data.studentId} / ${data.name}`);
   res.json({ ok: true });
 });
@@ -476,6 +497,50 @@ app.post("/api/students/:id/restore", adminOnly, async (req, res) => {
   if (!result.rowCount) return res.status(404).json({ error: "Student not found." });
   await audit(pool, req.session.user.id, "RESTORE_STUDENT", req.params.id, result.rows[0].student_id);
   res.json({ ok: true });
+});
+
+app.post("/api/students/import", adminOnly, async (req, res) => {
+  const content = String(req.body.content || "");
+  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return res.status(400).json({ error: "The file is empty." });
+  const first = lines[0].toLowerCase();
+  const start = first.includes("student_id") || first.includes("student id") ? 1 : 0;
+  let imported = 0;
+  const failures = [];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (let index = start; index < lines.length; index += 1) {
+      const columns = lines[index].split(",").map((item) => item.trim().replace(/^"|"$/g, "").replaceAll('""', '"'));
+      const [studentId, name, className, email] = columns;
+      const { data, errors } = cleanStudent({ studentId, name, className, email });
+      if (errors.length) {
+        failures.push({ line: index + 1, reason: errors.join(" ") });
+        continue;
+      }
+      try {
+        const result = await client.query(
+          `INSERT INTO students (student_id,name,class_name,email)
+           VALUES ($1,$2,$3,$4)
+           ON CONFLICT (student_id) DO UPDATE SET name=EXCLUDED.name,class_name=EXCLUDED.class_name,email=EXCLUDED.email,active=true,updated_at=NOW()
+           RETURNING id`,
+          [data.studentId, data.name, data.className, data.email]
+        );
+        imported += 1;
+        await ensureStudentAccount(result.rows[0].id, data.studentId, client);
+        await audit(client, req.session.user.id, "IMPORT_STUDENT", result.rows[0].id, `${data.studentId} / ${data.name}`);
+      } catch (error) {
+        failures.push({ line: index + 1, reason: error.message || "Database error." });
+      }
+    }
+    await client.query("COMMIT");
+    res.json({ imported, failed: failures.length, failures });
+  } catch {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: "Student import failed." });
+  } finally {
+    client.release();
+  }
 });
 
 app.post("/api/courses", adminOnly, async (req, res) => {
@@ -532,6 +597,21 @@ app.put("/api/courses/:id/roster", adminOnly, async (req, res) => {
 });
 
 app.get("/api/sessions", authenticated, async (req, res) => {
+  if (req.session.user.role === "student") {
+    const result = await pool.query(`
+      SELECT cs.id,cs.class_name AS "className",cs.session_date AS "sessionDate",
+        cs.opens_at AS "opensAt",cs.closes_at AS "closesAt",cs.late_after AS "lateAfter",
+        cs.checkin_method AS method,cs.status,c.code,c.name AS "courseName",
+        COALESCE(sa.status,'Not checked in') AS "myStatus",sa.checked_in_at AS "checkedInAt"
+      FROM checkin_sessions cs
+      JOIN courses c ON c.id=cs.course_id
+      JOIN enrollments e ON e.course_id=cs.course_id AND e.student_id=$1
+      JOIN students s ON s.id=e.student_id AND s.class_name=cs.class_name AND s.active=true
+      LEFT JOIN session_attendance sa ON sa.session_id=cs.id AND sa.student_id=$1
+      WHERE cs.status IN ('scheduled','active') AND cs.session_date >= CURRENT_DATE
+      ORDER BY cs.session_date,cs.opens_at`, [req.session.user.studentPk]);
+    return res.json({ rows: result.rows });
+  }
   const result = await pool.query(`
     SELECT cs.id,cs.class_name AS "className",cs.session_date AS "sessionDate",cs.opens_at AS "opensAt",
       cs.closes_at AS "closesAt",cs.late_after AS "lateAfter",cs.checkin_method AS method,
@@ -634,7 +714,9 @@ app.get("/api/sessions/:id/status", authenticated, async (req, res) => {
 
 app.post("/api/check-in", authenticated, async (req, res) => {
   const sessionId = Number(req.body.sessionId);
-  const studentId = String(req.body.studentId || "").trim();
+  const studentId = req.session.user.role === "student"
+    ? (await pool.query("SELECT student_id FROM students WHERE id=$1 AND active=true", [req.session.user.studentPk])).rows[0]?.student_id
+    : String(req.body.studentId || "").trim();
   const code = String(req.body.code || "").trim().toUpperCase();
   if (!Number.isInteger(sessionId) || !studentId || !code) return res.status(400).json({ error: "Session, student ID, and code are required." });
   const current = await pool.query(`SELECT cs.*,s.id AS student_pk FROM checkin_sessions cs JOIN students s ON s.student_id=$2 AND s.active=true JOIN enrollments e ON e.course_id=cs.course_id AND e.student_id=s.id AND s.class_name=cs.class_name WHERE cs.id=$1`, [sessionId,studentId]);
@@ -651,13 +733,17 @@ app.post("/api/check-in", authenticated, async (req, res) => {
 });
 
 app.get("/api/leaves", authenticated, async (req, res) => {
-  const result = await pool.query(`SELECT la.id,la.reason,la.description,la.status,la.created_at AS "createdAt",la.review_note AS "reviewNote",s.student_id AS "studentId",s.name,cs.session_date AS "sessionDate",c.code,c.name AS "courseName",cs.class_name AS "className" FROM leave_applications la JOIN students s ON s.id=la.student_id JOIN checkin_sessions cs ON cs.id=la.session_id JOIN courses c ON c.id=cs.course_id ORDER BY CASE WHEN la.status='Pending' THEN 0 ELSE 1 END,la.created_at DESC`);
+  const studentFilter = req.session.user.role === "student" ? " WHERE la.student_id=$1" : "";
+  const params = req.session.user.role === "student" ? [req.session.user.studentPk] : [];
+  const result = await pool.query(`SELECT la.id,la.reason,la.description,la.status,la.created_at AS "createdAt",la.review_note AS "reviewNote",s.student_id AS "studentId",s.name,cs.session_date AS "sessionDate",c.code,c.name AS "courseName",cs.class_name AS "className" FROM leave_applications la JOIN students s ON s.id=la.student_id JOIN checkin_sessions cs ON cs.id=la.session_id JOIN courses c ON c.id=cs.course_id${studentFilter} ORDER BY CASE WHEN la.status='Pending' THEN 0 ELSE 1 END,la.created_at DESC`, params);
   res.json({ rows: result.rows });
 });
 
 app.post("/api/leaves", authenticated, async (req, res) => {
   const sessionId = Number(req.body.sessionId);
-  const studentId = String(req.body.studentId || "").trim();
+  const studentId = req.session.user.role === "student"
+    ? (await pool.query("SELECT student_id FROM students WHERE id=$1 AND active=true", [req.session.user.studentPk])).rows[0]?.student_id
+    : String(req.body.studentId || "").trim();
   const reason = String(req.body.reason || "").trim();
   const description = String(req.body.description || "").trim();
   if (!Number.isInteger(sessionId) || !studentId || reason.length < 2 || description.length < 5) return res.status(400).json({ error: "Session, student ID, reason, and a detailed description are required." });
@@ -670,6 +756,15 @@ app.post("/api/leaves", authenticated, async (req, res) => {
   } catch (error) {
     res.status(error.code === "23505" ? 409 : 500).json({ error: error.code === "23505" ? "A leave application already exists for this student and session." : "Unable to submit leave application." });
   }
+});
+
+app.get("/api/student/profile", (req, res, next) => {
+  if (!req.session.user || req.session.user.role !== "student") return res.status(403).json({ error: "Student role required." });
+  next();
+}, async (req, res) => {
+  const result = await pool.query("SELECT id,student_id AS \"studentId\",name,class_name AS \"className\",email FROM students WHERE id=$1 AND active=true", [req.session.user.studentPk]);
+  if (!result.rowCount) return res.status(404).json({ error: "Student profile not found." });
+  res.json({ student: result.rows[0] });
 });
 
 app.put("/api/leaves/:id/review", adminOnly, async (req, res) => {

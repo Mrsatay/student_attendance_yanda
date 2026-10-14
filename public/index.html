@@ -35,13 +35,14 @@
     <aside class="sidebar">
       <div class="sidebar-brand"><div class="brand-mark small">AD</div><div><strong>Attendance</strong><span>Desk</span></div></div>
       <nav>
-        <button class="nav-item active" data-section="overview"><span>◈</span> Overview</button>
-        <button class="nav-item" data-section="sessions"><span>◷</span> Check-in sessions</button>
-        <button class="nav-item" data-section="students"><span>♙</span> Students</button>
-        <button class="nav-item" data-section="courses"><span>▦</span> Courses & roster</button>
-        <button class="nav-item" data-section="leaves"><span>✦</span> Leave approvals</button>
-        <button class="nav-item" data-section="reports"><span>⇩</span> Reports</button>
+        <button class="nav-item active admin-only" data-section="overview"><span>◈</span> Overview</button>
+        <button class="nav-item admin-only" data-section="sessions"><span>◷</span> Check-in sessions</button>
+        <button class="nav-item admin-only" data-section="students"><span>♙</span> Students</button>
+        <button class="nav-item admin-only" data-section="courses"><span>▦</span> Courses & roster</button>
+        <button class="nav-item admin-only" data-section="leaves"><span>✦</span> Leave approvals</button>
+        <button class="nav-item admin-only" data-section="reports"><span>⇩</span> Reports</button>
         <button class="nav-item admin-control" data-section="activity"><span>↻</span> Activity log</button>
+        <button class="nav-item student-only hidden" data-section="studentHome"><span>◉</span> My check-in</button>
       </nav>
       <div class="sidebar-bottom"><div class="user-chip"><div class="avatar" id="userAvatar">A</div><div><strong id="userName">Admin</strong><span id="userRole">Administrator</span></div></div><button id="logoutBtn" class="icon-button" title="Sign out">↪</button></div>
     </aside>
@@ -61,13 +62,23 @@
         </div>
       </section>
 
+      <section id="studentHomeSection" class="section hidden">
+        <div class="student-welcome panel"><p class="eyebrow">STUDENT PORTAL</p><h2 id="studentWelcome">Welcome</h2><p class="muted" id="studentProfileLine"></p></div>
+        <div class="panel table-panel"><div class="table-meta"><span id="studentSessionCount">0 active sessions</span><button class="button subtle" id="refreshStudentSessions">↻ Refresh</button></div><div class="table-scroll"><table><thead><tr><th>Course</th><th>Date</th><th>Window</th><th>My status</th><th>Check-in</th></tr></thead><tbody id="studentSessionsBody"></tbody></table><div id="studentSessionsEmpty" class="empty-state hidden">No active sessions for your enrolled courses.</div></div></div>
+        <div class="student-actions-grid">
+          <div class="panel"><div class="panel-heading"><div><p class="eyebrow">CHECK-IN</p><h2>Enter attendance code</h2></div></div><form id="studentCheckinForm" class="stack"><label>Session<select name="sessionId" id="studentSessionPicker" required></select></label><label>Attendance code<input name="code" required placeholder="6-character code" maxlength="12"></label><button class="button primary" type="submit">Check in now</button><p class="form-error" id="studentCheckinError"></p></form></div>
+          <div class="panel"><div class="panel-heading"><div><p class="eyebrow">LEAVE REQUEST</p><h2>Request approved absence</h2></div></div><form id="studentLeaveForm" class="stack"><label>Session<select name="sessionId" id="studentLeaveSession" required></select></label><label>Reason<select name="reason"><option>Medical</option><option>Family emergency</option><option>University activity</option><option>Other</option></select></label><label>Description<textarea name="description" required placeholder="Explain the reason"></textarea></label><button class="button subtle" type="submit">Submit leave request</button><p class="form-error" id="studentLeaveError"></p></form></div>
+        </div>
+        <div class="panel table-panel student-leaves"><div class="table-meta"><span>My leave applications</span></div><div class="table-scroll"><table><thead><tr><th>Course</th><th>Date</th><th>Reason</th><th>Status</th></tr></thead><tbody id="studentLeavesBody"></tbody></table></div></div>
+      </section>
+
       <section id="sessionsSection" class="section hidden">
         <div class="toolbar"><div class="search-wrap"><span>⌕</span><input id="sessionSearch" placeholder="Search course, class, or date"></div><button class="button subtle" id="refreshSessions">↻ Refresh</button></div>
         <div class="panel table-panel"><div class="table-meta"><span id="sessionCount">0 sessions</span><button class="button primary admin-control" id="newSessionBtn">＋ Initiate check-in</button></div><div class="table-scroll"><table><thead><tr><th>Session</th><th>Window</th><th>Roster</th><th>Live status</th><th>Status</th><th>Actions</th></tr></thead><tbody id="sessionsBody"></tbody></table><div id="sessionsEmpty" class="empty-state hidden">No check-in sessions yet.</div></div></div>
       </section>
 
       <section id="studentsSection" class="section hidden">
-        <div class="toolbar"><div class="search-wrap"><span>⌕</span><input id="studentSearch" placeholder="Search student ID, name, or class"></div><button class="button primary admin-control" id="newStudentBtn">＋ Add student</button></div>
+        <div class="toolbar"><div class="search-wrap"><span>⌕</span><input id="studentSearch" placeholder="Search student ID, name, or class"></div><button class="button subtle admin-control" id="importStudentsBtn">⇧ Import CSV</button><button class="button primary admin-control" id="newStudentBtn">＋ Add student</button></div>
         <div class="panel table-panel"><div class="table-meta"><span id="studentCount">0 students</span></div><div class="table-scroll"><table><thead><tr><th>Student</th><th>Class</th><th>Email</th><th>State</th><th class="admin-control">Actions</th></tr></thead><tbody id="studentsBody"></tbody></table></div></div>
       </section>
 
@@ -89,6 +100,7 @@
   <dialog id="studentDialog"><form id="studentForm" method="dialog"><div class="dialog-heading"><div><p class="eyebrow">STUDENT ROSTER</p><h2>Student profile</h2></div><button type="button" class="icon-button" data-close-dialog>×</button></div><input type="hidden" name="id"><div class="form-grid"><label>Student ID<input name="studentId" required></label><label>Name<input name="name" required></label><label>Class<input name="className" required></label><label>Email<input name="email" type="email"></label></div><p class="form-error dialog-error"></p><div class="dialog-actions"><button type="button" class="button subtle" data-close-dialog>Cancel</button><button class="button primary" type="submit">Save student</button></div></form></dialog>
   <dialog id="courseDialog"><form id="courseForm" method="dialog"><div class="dialog-heading"><div><p class="eyebrow">COURSE CATALOG</p><h2>Course profile</h2></div><button type="button" class="icon-button" data-close-dialog>×</button></div><input type="hidden" name="id"><div class="form-grid"><label>Course code<input name="code" required placeholder="CS301"></label><label>Course name<input name="name" required placeholder="Database Systems"></label><label>Semester<input name="semester" required placeholder="Fall 2026"></label></div><p class="form-error dialog-error"></p><div class="dialog-actions"><button type="button" class="button subtle" data-close-dialog>Cancel</button><button class="button primary" type="submit">Save course</button></div></form></dialog>
   <dialog id="statusDialog"><div class="dialog-heading"><div><p class="eyebrow">LIVE MONITOR</p><h2 id="statusTitle">Session status</h2></div><button type="button" class="icon-button" data-close-dialog>×</button></div><p class="muted" id="statusCode"></p><div id="statusGrid" class="status-grid"></div></dialog>
+  <input id="studentFileInput" type="file" accept=".csv,.txt" hidden>
   <input id="fileInput" type="file" accept=".csv,.txt" hidden>
   <div id="toast" class="toast"></div>
   <script src="/app-supervisor.js"></script>

@@ -35,6 +35,30 @@ The first administrator is created from `ADMIN_USERNAME` and `ADMIN_PASSWORD`. T
 
 Student and course removal uses archive/restore with a required reason, preserving history for auditability.
 
+## Student import format
+
+Use the `Import CSV` button in `Students` with this column order:
+
+```text
+student_id,student_name,class_name,email
+2351520115,Student One,2351520115,student1@example.com
+```
+
+Existing student IDs are updated and reactivated. Invalid rows are reported with their line number.
+
+## Login roles
+
+- Admin/teacher uses `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env`.
+- Student accounts are created automatically for active students.
+- Initial student login is:
+
+```text
+Username: student_id
+Password: student_id
+```
+
+After student login, the system uses the linked roster profile for check-in and leave requests. Students do not submit another student's ID during check-in.
+
 ## Import format
 
 CSV or TXT files should use this column order:

@@ -23,6 +23,8 @@ async function boot() {
   $("#headerActionBtn").addEventListener("click", () => { switchSection("sessions"); openSessionDialog(); });
   $("#newSessionBtn").addEventListener("click", openSessionDialog);
   $("#newStudentBtn").addEventListener("click", () => openProfileDialog("student"));
+  $("#importStudentsBtn").addEventListener("click", () => $("#studentFileInput").click());
+  $("#studentFileInput").addEventListener("change", importStudents);
   $("#newCourseBtn").addEventListener("click", () => openProfileDialog("course"));
   $("#sessionForm").addEventListener("submit", createSession);
   $("#studentForm").addEventListener("submit", saveStudent);
@@ -34,6 +36,9 @@ async function boot() {
   $("#saveRosterBtn").addEventListener("click", saveRoster);
   $("#reportExportBtn").addEventListener("click", exportReport);
   $("#leaveForm").addEventListener("submit", submitLeave);
+  $("#refreshStudentSessions").addEventListener("click", loadStudentPortal);
+  $("#studentCheckinForm").addEventListener("submit", studentCheckIn);
+  $("#studentLeaveForm").addEventListener("submit", studentSubmitLeave);
 }
 
 async function login(event) {
@@ -44,10 +49,18 @@ async function login(event) {
 
 function openApp(user) {
   state.user = user; $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden");
-  $("#userName").textContent = user.username; $("#userRole").textContent = user.role === "admin" ? "Administrator" : "Viewer"; $("#userAvatar").textContent = user.username.slice(0, 1).toUpperCase();
+  $("#userName").textContent = user.username; $("#userRole").textContent = user.role === "admin" ? "Administrator" : user.role === "student" ? "Student" : "Viewer"; $("#userAvatar").textContent = user.username.slice(0, 1).toUpperCase();
   if (user.role !== "admin") $$(".admin-control").forEach((el) => el.classList.add("hidden"));
   $("#todayLabel").textContent = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }).format(new Date());
-  loadAll();
+  if (user.role === "student") {
+    $$(".admin-only").forEach((el) => el.classList.add("hidden"));
+    $$(".student-only").forEach((el) => el.classList.remove("hidden"));
+    $("#headerActionBtn").classList.add("hidden");
+    switchSection("studentHome");
+    loadStudentPortal();
+  } else {
+    loadAll();
+  }
 }
 
 async function loadAll() {
@@ -62,10 +75,47 @@ function switchSection(section) {
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.section === section));
   $$(".section").forEach((element) => element.classList.add("hidden"));
   $(`#${section}Section`).classList.remove("hidden");
-  $("#sectionTitle").textContent = ({ overview: "Overview", sessions: "Check-in sessions", students: "Students", courses: "Courses & roster", leaves: "Leave approvals", reports: "Reports", activity: "Activity log" })[section];
+  $("#sectionTitle").textContent = ({ overview: "Overview", sessions: "Check-in sessions", students: "Students", courses: "Courses & roster", leaves: "Leave approvals", reports: "Reports", activity: "Activity log", studentHome: "My check-in" })[section];
   if (section === "students") renderStudents();
   if (section === "courses") renderCourses();
   if (section === "leaves") loadLeaves();
+}
+
+async function loadStudentPortal() {
+  try {
+    const [profile, sessions, leaves] = await Promise.all([api("/api/student/profile"), api("/api/sessions"), api("/api/leaves")]);
+    $("#studentWelcome").textContent = `Welcome, ${profile.student.name}`;
+    $("#studentProfileLine").textContent = `${profile.student.studentId} · ${profile.student.className}`;
+    $("#studentSessionCount").textContent = `${sessions.rows.length} upcoming or active session${sessions.rows.length === 1 ? "" : "s"}`;
+    $("#studentSessionsEmpty").classList.toggle("hidden", sessions.rows.length > 0);
+    const options = sessions.rows.map((item) => `<option value="${item.id}">${escapeHtml(item.code)} · ${formatDate(item.sessionDate)} · ${escapeHtml(item.status)}</option>`).join("");
+    $("#studentSessionPicker").innerHTML = `<option value="">Select session</option>${options}`;
+    $("#studentLeaveSession").innerHTML = `<option value="">Select session</option>${options}`;
+    $("#studentSessionsBody").innerHTML = sessions.rows.map((item) => `<tr><td><div class="student-cell"><strong>${escapeHtml(item.code)}</strong><span>${escapeHtml(item.courseName)}</span></div></td><td>${formatDate(item.sessionDate)}</td><td>${String(item.opensAt).slice(11,16)} - ${String(item.closesAt).slice(11,16)}</td><td><span class="pill ${String(item.myStatus).toLowerCase().replaceAll(" ","-")}">${escapeHtml(item.myStatus)}</span></td><td>${item.status === "active" ? "Enter code below" : escapeHtml(item.status)}</td></tr>`).join("");
+    $("#studentLeavesBody").innerHTML = leaves.rows.map((row) => `<tr><td>${escapeHtml(row.code)} · ${escapeHtml(row.courseName)}</td><td>${formatDate(row.sessionDate)}</td><td>${escapeHtml(row.reason)}</td><td><span class="pill ${row.status === "Approved" ? "punctual" : row.status === "Rejected" ? "absent" : "late"}">${escapeHtml(row.status)}</span></td></tr>`).join("");
+  } catch (error) { toast(error.message, true); }
+}
+
+async function studentCheckIn(event) {
+  event.preventDefault();
+  try {
+    await api("/api/check-in", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
+    $("#studentCheckinError").textContent = "";
+    event.target.reset();
+    toast("Check-in successful.");
+    await loadStudentPortal();
+  } catch (error) { $("#studentCheckinError").textContent = error.message; }
+}
+
+async function studentSubmitLeave(event) {
+  event.preventDefault();
+  try {
+    await api("/api/leaves", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
+    $("#studentLeaveError").textContent = "";
+    event.target.reset();
+    toast("Leave request submitted.");
+    await loadStudentPortal();
+  } catch (error) { $("#studentLeaveError").textContent = error.message; }
 }
 
 async function loadStats() {
@@ -128,6 +178,18 @@ function openProfileDialog(type, record = null) {
 async function saveStudent(event) { event.preventDefault(); await saveProfile(event, "student"); }
 async function saveCourse(event) { event.preventDefault(); await saveProfile(event, "course"); }
 async function saveProfile(event, type) { const form = event.target; try { const body = Object.fromEntries(new FormData(form)); const id = body.id; await api(id ? `/api/${type}s/${id}` : `/api/${type}s`, { method: id ? "PUT" : "POST", body: JSON.stringify(body) }); closeDialogs(); toast(`${type === "student" ? "Student" : "Course"} saved.`); await loadAll(); } catch (error) { form.querySelector(".dialog-error").textContent = error.message; } }
+async function importStudents(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const content = await file.text();
+    const result = await api("/api/students/import", { method: "POST", body: JSON.stringify({ content }) });
+    toast(`Imported ${result.imported} student${result.imported === 1 ? "" : "s"}; ${result.failed} failed.`);
+    await loadAll();
+    if (result.failures.length) alert(result.failures.map((failure) => `Line ${failure.line}: ${failure.reason}`).join("\n"));
+  } catch (error) { toast(error.message, true); }
+  event.target.value = "";
+}
 async function archiveStudent(id) { const reason = prompt("Why are you archiving this student?"); if (!reason) return; try { await api(`/api/students/${id}/archive`, { method: "POST", body: JSON.stringify({ reason }) }); toast("Student archived."); await loadAll(); } catch (error) { toast(error.message, true); } }
 async function restoreStudent(id) { try { await api(`/api/students/${id}/restore`, { method: "POST" }); toast("Student restored."); await loadAll(); } catch (error) { toast(error.message, true); } }
 async function archiveCourse(id) { const reason = prompt("Why are you archiving this course?"); if (!reason) return; try { await api(`/api/courses/${id}/archive`, { method: "POST", body: JSON.stringify({ reason }) }); toast("Course archived."); await loadAll(); } catch (error) { toast(error.message, true); } }
