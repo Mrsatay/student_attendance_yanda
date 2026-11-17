@@ -41,6 +41,11 @@ async function login(event) {
 }
 
 function openApp(user) {
+  const attendanceRequested = new URLSearchParams(location.search).get("workspace") === "attendance";
+  if (user.role === "student" && !attendanceRequested) {
+    location.replace("/learning.html");
+    return;
+  }
   state.user = user;
   $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden");
   $("#userName").textContent = user.username; $("#userRole").textContent = user.role === "admin" ? "Administrator" : "Viewer"; $("#userAvatar").textContent = user.username.slice(0, 1).toUpperCase();

@@ -8,3 +8,6 @@
 .student-welcome{margin-bottom:14px}.student-welcome h2{margin:0 0 6px;font-size:25px}.student-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.student-actions-grid textarea{min-height:84px;resize:vertical;border:1px solid var(--line);border-radius:7px;background:#fbfdfd;padding:11px 12px;color:var(--ink);outline:none}.student-leaves{margin-top:14px}
 @media(max-width:760px){.student-actions-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.roster-grid,.report-grid{grid-template-columns:1fr}}
+
+.student-photo{width:36px;height:36px;border-radius:50%;object-fit:cover;float:left;margin-right:9px}
+@media(max-width:900px){.sidebar{position:static}.sidebar nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}.sidebar-bottom{display:flex;margin-top:12px}.nav-item{min-width:0;overflow-wrap:anywhere}.sidebar nav a{text-decoration:none}.login-panel{padding:32px 24px}}

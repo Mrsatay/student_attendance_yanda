@@ -10,6 +10,7 @@ const api = async (url, options = {}) => {
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
 const formatDate = (value) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${String(value).slice(0, 10)}T00:00:00`));
 const toast = (message, error = false) => { const node = $("#toast"); node.textContent = message; node.className = `toast visible${error ? " error" : ""}`; setTimeout(() => node.className = "toast", 3200); };
+const studentAvatar = (student) => student.photoId && state.user.role === 'admin' ? '<img class="student-photo" src="/api/learning/files/' + student.photoId + '" alt="Student photo" loading="lazy">' : '';
 const showDialog = (id) => $(id).showModal();
 const closeDialogs = () => $$("dialog[open]").forEach((dialog) => dialog.close());
 
@@ -18,7 +19,7 @@ async function boot() {
   if (session.user) openApp(session.user);
   $("#loginForm").addEventListener("submit", login);
   $("#logoutBtn").addEventListener("click", async () => { await api("/api/auth/logout", { method: "POST" }); location.reload(); });
-  $$(".nav-item").forEach((button) => button.addEventListener("click", () => switchSection(button.dataset.section)));
+  $$(".nav-item[data-section]").forEach((button) => button.addEventListener("click", () => switchSection(button.dataset.section)));
   $$("[data-close-dialog]").forEach((button) => button.addEventListener("click", closeDialogs));
   $("#headerActionBtn").addEventListener("click", () => { switchSection("sessions"); openSessionDialog(); });
   $("#newSessionBtn").addEventListener("click", openSessionDialog);
@@ -32,7 +33,7 @@ async function boot() {
   $("#refreshSessions").addEventListener("click", loadSessions);
   $("#studentSearch").addEventListener("input", renderStudents);
   $("#manageRosterBtn").addEventListener("click", loadRoster);
-  $("#coursePicker").addEventListener("change", loadRoster);
+  $("#coursePicker").addEventListener("change", () => { $("#manageRosterBtn").disabled = !$("#coursePicker").value; loadRoster(); });
   $("#saveRosterBtn").addEventListener("click", saveRoster);
   $("#reportExportBtn").addEventListener("click", exportReport);
   $("#leaveForm").addEventListener("submit", submitLeave);
@@ -48,6 +49,7 @@ async function login(event) {
 }
 
 function openApp(user) {
+  if (['teacher', 'student'].includes(user.role)) { location.replace('/learning.html'); return; }
   state.user = user; $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden");
   $("#userName").textContent = user.username; $("#userRole").textContent = user.role === "admin" ? "Administrator" : user.role === "student" ? "Student" : "Viewer"; $("#userAvatar").textContent = user.username.slice(0, 1).toUpperCase();
   if (user.role !== "admin") $$(".admin-control").forEach((el) => el.classList.add("hidden"));
@@ -130,6 +132,7 @@ async function loadCatalog() {
   const options = state.catalog.courses.map((course) => `<option value="${course.id}">${escapeHtml(course.code)} · ${escapeHtml(course.name)}</option>`).join("");
   $("#sessionCourse").innerHTML = `<option value="">Select course</option>${options}`;
   $("#coursePicker").innerHTML = `<option value="">Select a course</option>${options}`;
+  $("#manageRosterBtn").disabled = true;
   $("#reportCourse").innerHTML = `<option value="">All courses</option>${options}`;
   const classes = [...new Set(state.catalog.students.filter((student) => student.active).map((student) => student.className))];
   $("#sessionClass").innerHTML = `<option value="">Select class</option>${classes.map((item) => `<option>${escapeHtml(item)}</option>`).join("")}`;
@@ -138,7 +141,8 @@ async function loadCatalog() {
 
 async function loadSessions() {
   const data = await api("/api/sessions"); state.sessions = data.rows;
-  $("#leaveSession").innerHTML = `<option value="">Select session</option>${state.sessions.filter((item) => item.status !== "archived").map((item) => `<option value="${item.id}">${escapeHtml(item.code)} · ${formatDate(item.sessionDate)} · ${escapeHtml(item.className)}</option>`).join("")}`;
+  const leaveSessions = state.sessions.filter((item) => item.status !== "archived");
+  $("#leaveSession").innerHTML = leaveSessions.length ? `<option value="">Select session</option>${leaveSessions.map((item) => `<option value="${item.id}">${escapeHtml(item.code)} · ${formatDate(item.sessionDate)} · ${escapeHtml(item.className)}</option>`).join("")}` : '<option value="">No non-archived sessions available</option>';
   const query = ($("#sessionSearch")?.value || "").toLowerCase();
   const rows = state.sessions.filter((item) => `${item.courseName} ${item.code} ${item.className} ${item.sessionDate}`.toLowerCase().includes(query));
   $("#sessionCount").textContent = `${rows.length} session${rows.length === 1 ? "" : "s"}`;
@@ -157,7 +161,7 @@ async function archiveSession(id) { const reason = prompt("Why are you archiving
 function renderStudents() {
   const query = ($("#studentSearch")?.value || "").toLowerCase(); const rows = state.catalog.students.filter((item) => `${item.studentId} ${item.name} ${item.className}`.toLowerCase().includes(query));
   $("#studentCount").textContent = `${rows.length} student${rows.length === 1 ? "" : "s"}`;
-  $("#studentsBody").innerHTML = rows.map((item) => `<tr><td><div class="student-cell"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.studentId)}</span></div></td><td>${escapeHtml(item.className)}</td><td>${escapeHtml(item.email || "—")}</td><td><span class="pill ${item.active ? "punctual" : "absent"}">${item.active ? "Active" : "Archived"}</span></td><td class="admin-control ${state.user.role !== "admin" ? "hidden" : ""}"><div class="row-actions">${item.active ? `<button class="text-button" data-edit-student="${item.id}">Edit</button><button class="text-button delete" data-archive-student="${item.id}">Archive</button>` : `<button class="text-button" data-restore-student="${item.id}">Restore</button>`}</div></td></tr>`).join("");
+  $("#studentsBody").innerHTML = rows.map((item) => `<tr><td><div class="student-cell">${studentAvatar(item)}<strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.studentId)}</span></div></td><td>${escapeHtml(item.className)}</td><td>${escapeHtml(item.email || "—")}</td><td><span class="pill ${item.active ? "punctual" : "absent"}">${item.active ? "Active" : "Archived"}</span></td><td class="admin-control ${state.user.role !== "admin" ? "hidden" : ""}"><div class="row-actions">${item.active ? `<button class="text-button" data-edit-student="${item.id}">Edit</button><button class="text-button delete" data-archive-student="${item.id}">Archive</button>` : `<button class="text-button" data-restore-student="${item.id}">Restore</button>`}</div></td></tr>`).join("");
   $$("[data-edit-student]").forEach((button) => button.onclick = () => openProfileDialog("student", state.catalog.students.find((item) => String(item.id) === button.dataset.editStudent)));
   $$("[data-archive-student]").forEach((button) => button.onclick = () => archiveStudent(button.dataset.archiveStudent));
   $$("[data-restore-student]").forEach((button) => button.onclick = () => restoreStudent(button.dataset.restoreStudent));
@@ -204,8 +208,8 @@ async function monitorSession(id) {
 async function refreshMonitor(id) { try { const data = await api(`/api/sessions/${id}/status`); $("#statusGrid").innerHTML = data.rows.map((row) => `<div class="status-student"><div><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.studentId)} · ${escapeHtml(row.className)}</span></div><span class="pill ${row.status.toLowerCase().replaceAll(" ","-")}">${row.status}</span></div>`).join("") || `<div class="empty-state">No enrolled students.</div>`; } catch (error) { toast(error.message, true); } }
 
 async function loadRoster() {
-  const courseId = $("#coursePicker").value; if (!courseId) return toast("Choose a course first.", true);
-  const data = await api(`/api/courses/${courseId}/roster`); $("#rosterPanel").classList.remove("hidden"); $("#rosterTitle").textContent = "Roster · " + $("#coursePicker").selectedOptions[0].textContent; $("#rosterGrid").innerHTML = data.rows.map((row) => `<label class="roster-item"><input type="checkbox" value="${row.id}" ${row.enrolled ? "checked" : ""}><span><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.studentId)} · ${escapeHtml(row.className)}</small></span></label>`).join("");
+  const courseId = $("#coursePicker").value; if (!courseId) { $("#coursePicker").focus(); return toast("Choose a course first, then manage its roster.", true); }
+  const data = await api(`/api/courses/${courseId}/roster`); $("#rosterPanel").classList.remove("hidden"); $("#rosterTitle").textContent = "Roster · " + $("#coursePicker").selectedOptions[0].textContent; $("#rosterGrid").innerHTML = data.rows.map((row) => `<label class="roster-item"><input type="checkbox" value="${row.id}" ${row.enrolled ? "checked" : ""}>${studentAvatar(row)}<span><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.studentId)} · ${escapeHtml(row.className)}</small></span></label>`).join("");
 }
 async function saveRoster() { const courseId = $("#coursePicker").value; const studentIds = $$("#rosterGrid input:checked").map((input) => Number(input.value)); try { await api(`/api/courses/${courseId}/roster`, { method: "PUT", body: JSON.stringify({ studentIds }) }); toast(`Roster saved with ${studentIds.length} students.`); await loadAll(); } catch (error) { toast(error.message, true); } }
 
@@ -221,5 +225,13 @@ async function submitLeave(event) {
 }
 
 async function loadAudit() { const data = await api("/api/audit"); $("#auditBody").innerHTML = data.rows.map((row) => `<tr><td><span class="pill ${row.action.includes("ARCHIVE") ? "absent" : row.action.includes("UPDATE") ? "late" : "punctual"}">${row.action.replaceAll("_"," ")}</span></td><td>${escapeHtml(row.username)}</td><td>${escapeHtml(row.details || "—")}</td><td>${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.createdAt))}</td></tr>`).join(""); }
-function exportReport() { const params = new URLSearchParams({ courseId: $("#reportCourse").value, from: $("#reportFrom").value, to: $("#reportTo").value }); window.location.href = `/api/reports/export?${params}`; }
+async function exportReport() {
+  const params = new URLSearchParams({ courseId: $("#reportCourse").value, from: $("#reportFrom").value, to: $("#reportTo").value });
+  try {
+    const data = await api(`/api/reports/preview?${params}`);
+    let preview = $('#attendancePreview');
+    if (!preview) { preview = document.createElement('div'); preview.id = 'attendancePreview'; $('#reportsSection').append(preview); }
+    preview.innerHTML = `<div class="panel"><h2>${data.count} attendance records</h2>${data.count ? `<a class="button primary" href="/api/reports/export?${escapeHtml(params.toString())}">Download matching CSV</a><div class="table-scroll"><table><thead><tr><th>Student</th><th>Course</th><th>Class</th><th>Date</th><th>Status</th></tr></thead><tbody>${data.rows.map(r => `<tr><td>${escapeHtml(r.name)} (${escapeHtml(r.student_id)})</td><td>${escapeHtml(r.course_code)}</td><td>${escapeHtml(r.class_name)}</td><td>${escapeHtml(r.session_date)}</td><td>${escapeHtml(r.status)}</td></tr>`).join('')}</tbody></table></div>` : `<p>${escapeHtml(data.message)}</p>`}</div>`;
+  } catch(error) { toast(error.message, true); }
+}
 boot().catch((error) => { $("#loginError").textContent = error.message; });

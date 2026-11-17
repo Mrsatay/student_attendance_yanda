@@ -6,7 +6,12 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test tests/domain.test.js",
+    "test:integration": "node --test tests/integration.test.js",
+    "backup": "node scripts/backup.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "seed:demo:reset": "node scripts/seed-demo.js --reset"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Learning workspace</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/learning.css"></head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar"><div class="sidebar-brand"><div class="brand-mark small">SAM</div><div><strong>Learning</strong><span>Classroom insights</span></div></div>
+      <nav aria-label="Learning navigation">
+        <button class="nav-item active" data-view="dashboard">Home</button>
+        <button class="nav-item active" id="activitiesNav" data-view="activities">Activities & homework</button>
+        <button class="nav-item" id="profilesNav" data-view="profiles">Learning profiles</button>
+        <button class="nav-item staff hidden" data-view="analytics">Teaching analytics</button>
+        <button class="nav-item staff hidden" data-view="sessions">Class sessions</button>
+        <button class="nav-item admin hidden" data-view="manage">People & settings</button>
+        <a class="nav-item" id="attendanceLink" href="/?workspace=attendance">Attendance workspace</a>
+      </nav>
+      <div class="sidebar-bottom"><span id="identity"></span><button class="button subtle" id="logout">Log out</button></div>
+    </aside>
+    <section class="content">
+      <header class="topbar"><div><p class="eyebrow">LEARNING WORKSPACE</p><h1 id="viewTitle">Activities & homework</h1></div><button class="button subtle" id="refresh">Refresh</button></header>
+      <p id="notice" role="status" aria-live="polite"></p>
+      <section id="dashboardView" class="view">
+        <div id="dashboardContent"></div>
+      </section>
+      <section id="activitiesView" class="view">
+        <div class="toolbar"><label>Search<input id="activitySearch" type="search" placeholder="Find an activity or course"></label><label>Type<select id="kindFilter"><option value="">All activities</option><option value="quiz">Classroom quiz</option><option value="homework">Homework</option></select></label><label>Status<select id="statusFilter"><option value="">All statuses</option><option>draft</option><option>open</option><option>closed</option><option>archived</option></select></label><button id="newActivity" class="button primary staff hidden">Create activity</button></div>
+        <div id="activityList" class="learning-cards"></div>
+      </section>
+      <section id="detailView" class="view hidden"><button class="button subtle" id="backActivities">Back to activities</button><div id="activityDetail"></div></section>
+      <section id="profilesView" class="view hidden"><div class="toolbar"><label id="profileStudentField">Student<select id="profileStudent"></select></label><label>Course<select id="profileCourse"></select></label><label>From<input id="profileFrom" type="date"></label><label>To<input id="profileTo" type="date"></label><button id="loadProfile" class="button primary">View profile</button></div><div id="profileContent"></div></section>
+      <section id="checkinView" class="view hidden"><div id="checkinContent"></div></section>
+      <section id="analyticsView" class="view hidden"><div class="toolbar"><label>Course<select id="analyticsCourse"></select></label><label>From<input id="analyticsFrom" type="date"></label><label>To<input id="analyticsTo" type="date"></label><button id="loadAnalytics" class="button primary">Apply filters</button></div><div class="panel"><h2>Teaching activity timer</h2><p class="muted">Self-recorded activity, not automatic classroom observation. Pause when you stop teaching. Closing the session stops its timers.</p><div class="toolbar"><label>Active session<select id="timerSession"></select></label><button class="button subtle" data-mode="teaching">Start teaching</button><button class="button subtle" data-mode="interaction">Start interaction</button><button class="button subtle" data-mode="board">Start board writing</button><button class="button subtle" data-mode="pause">Pause</button></div><p id="timerStatus"></p></div><div id="analyticsContent"></div></section>
+      <section id="sessionsView" class="view hidden"><div class="panel"><h2>Create class session</h2><form id="sessionCreate" class="form-grid"><label>Course<select name="courseId" id="newSessionCourse" required></select></label><label>Class<select name="className" id="newSessionClass" required></select></label><label>Date<input type="date" name="sessionDate" required></label><label>Open<input type="time" name="startTime" value="08:00" required></label><label>Close<input type="time" name="endTime" value="09:00" required></label><label>Late after<input type="time" name="lateAfter" value="08:15" required></label><input type="hidden" name="method" value="code"><button class="button primary">Create session</button></form></div><div id="sessionList"></div></section>
+      <section id="manageView" class="view hidden">
+        <div class="learning-cards"><div class="panel"><h2>Create teacher account</h2><form id="teacherCreate" class="stack"><label>Username<input name="username" minlength="3" maxlength="80" required autocomplete="off"></label><label>Initial password<input name="password" type="password" minlength="10" maxlength="128" required autocomplete="new-password"></label><button class="button primary">Create teacher</button></form></div>
+        <div class="panel"><h2>Assign course teachers</h2><form id="teacherAssign" class="stack"><label>Course<select id="assignCourse" required></select></label><div id="teacherChoices"></div><button class="button primary">Save assignments</button></form></div>
+        <div class="panel"><h2>Student photo & cohort</h2><form id="studentExtras" class="stack"><label>Student<select id="extrasStudent" required></select></label><label>Cohort / grade<input id="extrasCohort" maxlength="80" placeholder="e.g. 2026"></label><label>Profile photo (JPEG/PNG, max 2 MB)<input id="extrasPhoto" type="file" accept="image/png,image/jpeg"></label><p class="muted">Cohort changes apply to new session snapshots. Existing records retain their original cohort.</p><button class="button primary">Save profile details</button></form></div>
+        <div class="panel"><h2>Learning thresholds</h2><form id="settingsForm" class="stack"><label>Needs practice below (%)<input id="weakThreshold" type="number" min="0" max="100" required></label><label>Minimum graded questions<input id="minQuestions" type="number" min="1" max="100" required></label><button class="button primary">Save thresholds</button></form></div></div>
+      </section>
+    </section>
+  </main>
+  <dialog id="activityEditor"><form id="activityCreate"><div class="dialog-heading"><div><p class="eyebrow">NEW LEARNING ACTIVITY</p><h2>Build a quiz or homework</h2></div><button type="button" class="icon-button" id="closeEditor" aria-label="Close">&times;</button></div><div class="form-grid"><label>Title<input name="title" maxlength="160" required minlength="2"></label><label>Session<select name="sessionId" id="activitySession" required></select></label><label>Type<select name="kind" id="activityKind"><option value="quiz">Classroom quiz</option><option value="homework">Homework</option></select></label><label>Deadline (required for homework)<input type="datetime-local" name="dueAt" id="activityDue"></label><label class="wide-field">Instructions<textarea name="instructions" maxlength="10000"></textarea></label><label class="check-label"><input name="allowLate" type="checkbox"> Allow late submissions</label><label class="check-label"><input name="allowRevision" type="checkbox"> Allow revisions</label></div><details><summary>Share this assessment with other classes</summary><p class="muted">Select additional sessions in the same course to compare classes using identical questions. Filters use the primary session date.</p><div id="sharedSessions"></div></details><h3>Questions & scoring</h3><p class="muted">Use consistent topic names across activities. Essay rubrics describe how the available points are awarded.</p><div id="questionEditor"></div><div class="toolbar"><button type="button" id="addMcq" class="button subtle">Add multiple choice</button><button type="button" id="addEssay" class="button subtle">Add essay / task</button></div><p class="form-error" id="editorError" role="alert"></p><div class="dialog-actions"><button class="button primary">Save draft</button></div></form></dialog>
+  <script type="module" src="/learning.js"></script>
+</body></html>
